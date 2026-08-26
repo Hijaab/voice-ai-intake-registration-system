@@ -1,0 +1,10 @@
+# Virtual environment
+venv/
+.venv/
+
+# Database artifacts
+*.db
+
+# Python bytecode & cache
+__pycache__/
+*.pyc

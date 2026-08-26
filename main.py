@@ -161,6 +161,12 @@ def on_startup():
     SQLModel.metadata.create_all(engine)
 
 
+# Required Streamlit Cloud Health Check Endpoint
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
 @app.get("/patients")
 def list_patients(
     last_name: Optional[str] = Query(None),
@@ -274,22 +280,22 @@ async def vapi_webhook(payload: dict):
     return {"status": "ok"}
 
 
-# --- Background Thread Execution for FastAPI ---
-def run_fastapi():
+# --- Start FastAPI Background Thread ---
+def start_fastapi_thread():
     SQLModel.metadata.create_all(engine)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Bind to localhost on internal port 8000 to prevent port-grabbing
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
 
-@st.cache_resource
-def start_backend_server():
-    thread = threading.Thread(target=run_fastapi, daemon=True)
+if "fastapi_started" not in st.session_state:
+    thread = threading.Thread(target=start_fastapi_thread, daemon=True)
     thread.start()
+    st.session_state["fastapi_started"] = True
 
-start_backend_server()
 
-# --- Streamlit Dashboard UI ---
+# --- Streamlit Front-End UI ---
 st.set_page_config(page_title="CareCloud Voice AI", page_icon="🎙️", layout="wide")
 st.title("CareCloud Voice AI - Patient Registration Dashboard")
-st.success("FastAPI Backend and Vapi Webhook Engine is active on port 8000.")
+st.success("FastAPI & Vapi Webhook Engine is active internally on port 8000.")
 
 st.subheader("Registered Patients")
 with Session(engine) as session:

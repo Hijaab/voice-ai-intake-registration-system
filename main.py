@@ -153,7 +153,7 @@ class PatientUpdateSchema(BaseModel):
 
 
 # --- FastAPI Application ---
-app = FastAPI(title="CareCloud Voice AI - Patient Registration API")
+app = FastAPI(title="Voice AI - Patient Registration API")
 
 
 @app.on_event("startup")
@@ -293,8 +293,8 @@ if "fastapi_started" not in st.session_state:
 
 
 # --- Streamlit Front-End UI ---
-st.set_page_config(page_title="CareCloud Voice AI", page_icon="🎙️", layout="wide")
-st.title("CareCloud Voice AI - Patient Registration Dashboard")
+st.set_page_config(page_title="Voice AI", page_icon="🎙️", layout="wide")
+st.title("Voice AI - Patient Registration Dashboard")
 st.success("FastAPI & Vapi Webhook Engine is active internally on port 8000.")
 
 st.subheader("Registered Patients")

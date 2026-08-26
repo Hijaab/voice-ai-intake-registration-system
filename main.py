@@ -283,8 +283,8 @@ async def vapi_webhook(payload: dict):
 # --- Start FastAPI Background Thread ---
 def start_fastapi_thread():
     SQLModel.metadata.create_all(engine)
-    # Bind to localhost on internal port 8000 to prevent port-grabbing
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+    # Bind to localhost on internal port 8001 to prevent port-grabbing
+    uvicorn.run(app, host="127.0.0.1", port=8001, log_level="error")
 
 if "fastapi_started" not in st.session_state:
     thread = threading.Thread(target=start_fastapi_thread, daemon=True)
@@ -295,7 +295,7 @@ if "fastapi_started" not in st.session_state:
 # --- Streamlit Front-End UI ---
 st.set_page_config(page_title="Voice AI", page_icon="🎙️", layout="wide")
 st.title("Voice AI - Patient Registration Dashboard")
-st.success("FastAPI & Vapi Webhook Engine is active internally on port 8000.")
+st.success("FastAPI & Vapi Webhook Engine is active internally on port 8001.")
 
 st.subheader("Registered Patients")
 with Session(engine) as session:

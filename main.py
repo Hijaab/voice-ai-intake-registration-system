@@ -1,18 +1,23 @@
 import os
 import re
+import threading
+import uvicorn
 from datetime import datetime, date
 from typing import Optional, List
 from uuid import UUID, uuid4
 
+import streamlit as st
 from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, validator
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 
-# Persistent SQLite configuration
+# --- Persistent SQLite configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./patients.db")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
+
+# --- Database Model ---
 class Patient(SQLModel, table=True):
     __tablename__ = "patients"
 
@@ -33,19 +38,21 @@ class Patient(SQLModel, table=True):
     preferred_language: str = Field(default="English")
     emergency_contact_name: Optional[str] = Field(default=None)
     emergency_contact_phone: Optional[str] = Field(default=None)
-    
+
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     deleted_at: Optional[str] = Field(default=None, index=True)
 
+
 US_STATES = {
-    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", 
-    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
-    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
-    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
     "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
 }
 VALID_SEX = {"Male", "Female", "Other", "Decline to Answer"}
+
 
 def sanitize_phone(phone: str) -> str:
     cleaned = re.sub(r"\D", "", phone)
@@ -53,6 +60,8 @@ def sanitize_phone(phone: str) -> str:
         cleaned = cleaned[1:]
     return cleaned
 
+
+# --- Pydantic Schemas ---
 class PatientBaseSchema(BaseModel):
     first_name: str
     last_name: str
@@ -119,8 +128,10 @@ class PatientBaseSchema(BaseModel):
             raise ValueError("ZIP code must be 5 digits or ZIP+4 format")
         return v
 
+
 class PatientCreateSchema(PatientBaseSchema):
     pass
+
 
 class PatientUpdateSchema(BaseModel):
     first_name: Optional[str] = None
@@ -140,11 +151,15 @@ class PatientUpdateSchema(BaseModel):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
 
+
+# --- FastAPI Application ---
 app = FastAPI(title="CareCloud Voice AI - Patient Registration API")
+
 
 @app.on_event("startup")
 def on_startup():
     SQLModel.metadata.create_all(engine)
+
 
 @app.get("/patients")
 def list_patients(
@@ -164,6 +179,7 @@ def list_patients(
         patients = session.exec(query).all()
         return {"data": [p.dict() for p in patients], "error": None}
 
+
 @app.get("/patients/{patient_id}")
 def get_patient(patient_id: UUID):
     with Session(engine) as session:
@@ -171,6 +187,7 @@ def get_patient(patient_id: UUID):
         if not patient or patient.deleted_at:
             raise HTTPException(status_code=404, detail="Patient not found")
         return {"data": patient.dict(), "error": None}
+
 
 @app.post("/patients", status_code=status.HTTP_201_CREATED)
 def create_patient(payload: PatientCreateSchema):
@@ -180,6 +197,7 @@ def create_patient(payload: PatientCreateSchema):
         session.commit()
         session.refresh(patient)
         return {"data": patient.dict(), "error": None}
+
 
 @app.put("/patients/{patient_id}")
 def update_patient(patient_id: UUID, payload: PatientUpdateSchema):
@@ -196,6 +214,7 @@ def update_patient(patient_id: UUID, payload: PatientUpdateSchema):
         session.refresh(patient)
         return {"data": patient.dict(), "error": None}
 
+
 @app.delete("/patients/{patient_id}")
 def delete_patient(patient_id: UUID):
     with Session(engine) as session:
@@ -206,6 +225,7 @@ def delete_patient(patient_id: UUID):
         session.add(patient)
         session.commit()
         return {"data": {"message": f"Patient {patient_id} soft-deleted"}, "error": None}
+
 
 @app.post("/vapi/webhook")
 async def vapi_webhook(payload: dict):
@@ -221,7 +241,16 @@ async def vapi_webhook(payload: dict):
                 with Session(engine) as session:
                     query = select(Patient).where(Patient.phone_number == phone, Patient.deleted_at == None)
                     existing = session.exec(query).first()
-                    res = {"found": True, "patient_id": str(existing.patient_id), "first_name": existing.first_name, "last_name": existing.last_name} if existing else {"found": False}
+                    res = (
+                        {
+                            "found": True,
+                            "patient_id": str(existing.patient_id),
+                            "first_name": existing.first_name,
+                            "last_name": existing.last_name,
+                        }
+                        if existing
+                        else {"found": False}
+                    )
                     return {"results": [{"toolCallId": call_id, "result": res}]}
 
             elif tool_name == "register_patient":
@@ -232,13 +261,42 @@ async def vapi_webhook(payload: dict):
                         session.add(patient)
                         session.commit()
                         session.refresh(patient)
-                        return {"results": [{"toolCallId": call_id, "result": {"success": True, "patient_id": str(patient.patient_id)}}]}
+                        return {
+                            "results": [
+                                {
+                                    "toolCallId": call_id,
+                                    "result": {"success": True, "patient_id": str(patient.patient_id)},
+                                }
+                            ]
+                        }
                 except Exception as e:
                     return {"results": [{"toolCallId": call_id, "result": {"success": False, "error": str(e)}}]}
     return {"status": "ok"}
 
-import streamlit as st
 
-st.title("Voice AI - Patient Registration")
-st.write("FastAPI Backend and Vapi Webhook Engine is loaded.")
+# --- Background Thread Execution for FastAPI ---
+def run_fastapi():
+    SQLModel.metadata.create_all(engine)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@st.cache_resource
+def start_backend_server():
+    thread = threading.Thread(target=run_fastapi, daemon=True)
+    thread.start()
+
+start_backend_server()
+
+# --- Streamlit Dashboard UI ---
+st.set_page_config(page_title="CareCloud Voice AI", page_icon="🎙️", layout="wide")
+st.title("CareCloud Voice AI - Patient Registration Dashboard")
+st.success("FastAPI Backend and Vapi Webhook Engine is active on port 8000.")
+
+st.subheader("Registered Patients")
+with Session(engine) as session:
+    patients = session.exec(select(Patient).where(Patient.deleted_at == None)).all()
+    if patients:
+        st.dataframe([p.dict() for p in patients], use_container_width=True)
+    else:
+        st.info("No active patient records found in database.")
+
 st.json({"status": "healthy", "service": "FastAPI + Streamlit"})

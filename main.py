@@ -236,3 +236,9 @@ async def vapi_webhook(payload: dict):
                 except Exception as e:
                     return {"results": [{"toolCallId": call_id, "result": {"success": False, "error": str(e)}}]}
     return {"status": "ok"}
+
+import streamlit as st
+
+st.title("Voice AI - Patient Registration")
+st.write("FastAPI Backend and Vapi Webhook Engine is loaded.")
+st.json({"status": "healthy", "service": "FastAPI + Streamlit"})

@@ -1,4 +1,6 @@
-fastapi
-uvicorn
-sqlmodel
-pydantic[email]
+streamlit>=1.40,<2
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+sqlmodel>=0.0.22,<1
+pydantic>=2.7,<3
+email-validator>=2.2,<3

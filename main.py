@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import streamlit as st
 from fastapi import FastAPI, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 
 # --- Persistent SQLite configuration ---
@@ -80,15 +80,17 @@ class PatientBaseSchema(BaseModel):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
 
-    @validator("first_name", "last_name")
-    def validate_name(cls, v):
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
         v = v.strip()
         if not (1 <= len(v) <= 50) or not re.match(r"^[A-Za-z\s'\-]+$", v):
             raise ValueError("Name must be 1-50 alphabetic characters")
         return v
 
-    @validator("date_of_birth")
-    def validate_dob(cls, v):
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_dob(cls, v: str) -> str:
         v = v.strip()
         try:
             dob_date = datetime.strptime(v, "%m/%d/%Y").date()
@@ -98,15 +100,17 @@ class PatientBaseSchema(BaseModel):
             raise ValueError("Date of birth cannot be in the future")
         return v
 
-    @validator("sex")
-    def validate_sex(cls, v):
+    @field_validator("sex")
+    @classmethod
+    def validate_sex(cls, v: str) -> str:
         v = v.strip().title()
         if v not in VALID_SEX:
             raise ValueError(f"Sex must be one of: {', '.join(VALID_SEX)}")
         return v
 
-    @validator("phone_number", "emergency_contact_phone")
-    def validate_phone(cls, v):
+    @field_validator("phone_number", "emergency_contact_phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
         cleaned = sanitize_phone(v)
@@ -114,15 +118,17 @@ class PatientBaseSchema(BaseModel):
             raise ValueError("Must be valid 10-digit U.S. phone number")
         return cleaned
 
-    @validator("state")
-    def validate_state(cls, v):
+    @field_validator("state")
+    @classmethod
+    def validate_state(cls, v: str) -> str:
         v = v.strip().upper()
         if v not in US_STATES:
             raise ValueError("Must be valid 2-letter U.S. state abbreviation")
         return v
 
-    @validator("zip_code")
-    def validate_zip(cls, v):
+    @field_validator("zip_code")
+    @classmethod
+    def validate_zip(cls, v: str) -> str:
         v = v.strip()
         if not re.match(r"^\d{5}(-\d{4})?$", v):
             raise ValueError("ZIP code must be 5 digits or ZIP+4 format")
@@ -280,16 +286,21 @@ async def vapi_webhook(payload: dict):
     return {"status": "ok"}
 
 
-# --- Start FastAPI Background Thread ---
-def start_fastapi_thread():
+# --- Safe FastAPI Background Thread Launcher ---
+def run_fastapi_server():
     SQLModel.metadata.create_all(engine)
-    # Bind to localhost on internal port 8001 to prevent port-grabbing
     uvicorn.run(app, host="127.0.0.1", port=8001, log_level="error")
 
-if "fastapi_started" not in st.session_state:
-    thread = threading.Thread(target=start_fastapi_thread, daemon=True)
+
+@st.cache_resource
+def start_fastapi_thread():
+    thread = threading.Thread(target=run_fastapi_server, daemon=True)
     thread.start()
-    st.session_state["fastapi_started"] = True
+    return True
+
+
+# Initialize FastAPI backend thread safely
+start_fastapi_thread()
 
 
 # --- Streamlit Front-End UI ---

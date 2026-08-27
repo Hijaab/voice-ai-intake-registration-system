@@ -1,57 +1,88 @@
-import os
+from datetime import date, datetime, timezone
+from typing import Optional
+from uuid import UUID, uuid4
 
-from dotenv import load_dotenv
-from sqlmodel import Session, SQLModel, create_engine
-
-
-# Load environment variables from .env
-load_dotenv()
+from sqlmodel import Field, SQLModel
 
 
-# ---------------------------------------------------------
-# DATABASE URL
-# ---------------------------------------------------------
+class Patient(SQLModel, table=True):
+    __tablename__ = "patients"
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./patients.db",
-)
+    patient_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        index=True,
+    )
 
+    # Required demographic information
+    first_name: str = Field(max_length=50)
+    last_name: str = Field(max_length=50)
 
-# ---------------------------------------------------------
-# SQLITE CONFIGURATION
-# ---------------------------------------------------------
+    date_of_birth: date
 
-connect_args = {}
+    sex: str = Field(max_length=30)
 
-if DATABASE_URL.startswith("sqlite"):
-    connect_args = {
-        "check_same_thread": False
-    }
+    phone_number: str = Field(
+        max_length=10,
+        index=True,
+    )
 
+    # Optional
+    email: Optional[str] = Field(
+        default=None,
+        max_length=254,
+    )
 
-# ---------------------------------------------------------
-# DATABASE ENGINE
-# ---------------------------------------------------------
+    address_line_1: str = Field(max_length=200)
 
-engine = create_engine(
-    DATABASE_URL,
-    echo=False,
-    connect_args=connect_args,
-)
+    address_line_2: Optional[str] = Field(
+        default=None,
+        max_length=200,
+    )
 
+    city: str = Field(max_length=100)
 
-# ---------------------------------------------------------
-# CREATE TABLES
-# ---------------------------------------------------------
+    state: str = Field(
+        max_length=2,
+        index=True,
+    )
 
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+    zip_code: str = Field(max_length=10)
 
+    insurance_provider: Optional[str] = Field(
+        default=None,
+        max_length=150,
+    )
 
-# ---------------------------------------------------------
-# DATABASE SESSION
-# ---------------------------------------------------------
+    insurance_member_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+    )
 
-def get_session():
-    return Session(engine)
+    preferred_language: str = Field(
+        default="English",
+        max_length=50,
+    )
+
+    emergency_contact_name: Optional[str] = Field(
+        default=None,
+        max_length=150,
+    )
+
+    emergency_contact_phone: Optional[str] = Field(
+        default=None,
+        max_length=10,
+    )
+
+    # System fields
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+    deleted_at: Optional[datetime] = Field(
+        default=None
+    )

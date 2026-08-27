@@ -4,3 +4,12 @@ sqlalchemy==2.0.52
 pydantic==2.13.4
 email-validator==2.3.0
 python-dotenv==1.2.3
+fastapi
+uvicorn[standard]
+sqlmodel
+pydantic
+pydantic[email]
+python-dotenv
+requests
+streamlit
+pandas

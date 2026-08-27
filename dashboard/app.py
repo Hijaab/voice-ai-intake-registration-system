@@ -11,7 +11,7 @@ import streamlit as st
 
 API_BASE_URL = os.getenv(
     "API_BASE_URL",
-    "http://localhost:8000"
+    "http://localhost:8001"
 ).rstrip("/")
 
 
